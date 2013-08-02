@@ -50,7 +50,7 @@ The kickstart config must contain the Junos event-trigger.  An exaple of one is 
   * (4)  The device's specific configuration is committed
   * (5)  Process is complete
 
-# Web Server
+# DevTest Web Server
 
 This example contains a Sinatra based webserver application.  It's included to provide a mock-up and dev-test environment for the jctyztp.slax script.  The webserver provides the following URL ("routes"):
 
