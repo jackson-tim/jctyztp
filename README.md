@@ -97,7 +97,7 @@ Aug  2 10:54:20  staging_switch cscript: jctyztp[5028]: SCRIPT-END
 
 # ERROR-HANDLING
 
-The jctztp script has code to ensure that only one instance of the script is running.  It creates a "lockfile" in /tmp.  If for any reason you run into issues/errors, you can always manually remove the file.
+The jctztp script has code to ensure that only one instance of the script is running.  It creates a "lockfile" in /tmp/jctyztp.lock.  If for any reason you run into issues/errors, you can always manually remove the file.
 
 Additional error handling will be added to jctyztp.slax as well.
 
