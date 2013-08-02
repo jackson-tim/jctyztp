@@ -1,2 +1,4 @@
-OVERVIEW
-========
+# OVERVIEW
+
+# LICENSE
+BSD-2, see [LICENSE](LICENSE.md) file
