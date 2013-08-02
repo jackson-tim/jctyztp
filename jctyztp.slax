@@ -48,7 +48,6 @@ var $jnx = jcs:open();
 
 match / {
 
-
   if(not( $jnx )) {
     expr jcs:syslog( $SYSLOG, $APPNAME _ ":ERROR: unable to connect to Junos API");
     terminate;
