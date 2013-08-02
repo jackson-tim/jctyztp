@@ -33,7 +33,7 @@ The kickstart config must contain the Junos event-trigger.  An example kickstart
   Once Junos obtains the jctyztp.slax script, the code will perform the following
   
   * (1)  Make an HTTP-GET request to obtain the device's specific Junos configuration file.  The actual mechanics of how that configuration file is produced is specific to your application, not this script.  The return of the HTTP-GET is simply a Junos configuration text file.
-  * (2)  The configuraiton **MUST** contain a specific group/apply-macro.  This macro identifies the specific Junos OS package that should be running on the device.  Here is an example:
+  * (2)  The configuraiton **MUST** contain a specific group/apply-macro.  This macro identifies the specific Junos OS package that should be running on the device.  Here is an example.  You do **NOT** add this group to an apply-group configuration; it's just simply being used to store the information that jctyztp.slax needs.
   
 ````
    groups {
