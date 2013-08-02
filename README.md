@@ -16,7 +16,7 @@
 
   This section outlines the automation workflow from "factory reset".  There are two basic phases.  
   
-## Kickstart
+## Kickstart Config
 
   The first phase we'll call the "kickstart".  Its purpose is to obtain a generic config file that triggers a script.  
   
@@ -25,7 +25,7 @@
   3. Junos will TFTP-GET the kickstart config and commit it. The config includes an event-trigger  
   4. The event-trigger will HTTP-GET a script, `jctyztp.slax`.  The script will perform next step of the process
 
-## JCTYZTP
+## Script Execution
 
   Once Junos obtains the jctyztp.slax script, the code will perform the following
   
