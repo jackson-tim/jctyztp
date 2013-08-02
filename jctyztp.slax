@@ -1,0 +1,292 @@
+version 1.1;
+
+/* ------------------------------------------------------------------ */
+/* XML namespaces                                                     */
+/* ------------------------------------------------------------------ */
+
+/* Juniper */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+/* EXSLT */
+ns str extension = "http://exslt.org/strings";
+
+/* private namespace for this script */
+ns jctyztp = "http://xml.juniper.com/jctyztp/1.0";
+
+import '../import/junos.xsl';
+
+/* ------------------------------------------------------------------ */
+/* Script parameters                                                  */
+/* ------------------------------------------------------------------ */
+
+param $server = 'ztpserver';
+
+/* ------------------------------------------------------------------ */
+/* Constants                                                          */
+/* ------------------------------------------------------------------ */
+
+var $APPNAME = 'jctyztp[' _ $junos-context/pid _ ']';
+var $SYSLOG = 'user.info';
+var $TMPDIR = '/var/tmp';
+var $JUNOS_CONF = '/var/tmp/junos.conf';
+
+var $ZTP_GROUP_NAME = "jctyztp";
+var $ZTP_MACRO_NAME = "conf";
+var $ZTP_LOCKFILE = '/tmp/ztp.lock';
+
+/* ------------------------------------------------------------------ */
+/* Global variables                                                   */
+/* ------------------------------------------------------------------ */
+
+var $jnx = jcs:open();
+
+/* ------------------------------------------------------------------ */
+/*                                MAIN                                */ 
+/* ------------------------------------------------------------------ */
+
+match / {
+
+
+  if(not( $jnx )) {
+    expr jcs:syslog( $SYSLOG, $APPNAME _ ":ERROR: unable to connect to Junos API");
+    terminate;
+  }
+  
+  var $running = jctyztp:only_once();
+  if( $running ) {
+    expr jcs:syslog( $SYSLOG, $APPNAME _ ": process already running, backing off" );
+    terminate;
+  }
+  
+  expr jcs:syslog( $SYSLOG, $APPNAME _ ": SCRIPT-BEGIN" );
+  
+  /* if the $JUNOS_CONF file is not on the device, then */
+  /* download it from the server */
+     
+  if(not( jctyztp:file-exists( $JUNOS_CONF ))) {
+    expr jcs:syslog( $SYSLOG, $APPNAME _ ": obtaining device config file");
+    var $cp = jctyztp:dl_junos_conf();
+  }
+  
+  /* now load $JUNOS_CONF into the candidate configuration so we can */
+  /* extract the ZTP config */
+  
+  var $ztp_conf = jctyztp:ld_junos_conf();
+  expr jcs:syslog( $SYSLOG, $APPNAME _ ": has-ver:" _ $ztp_conf/has_version _ " should-ver:" _ $ztp_conf/package );
+  
+  /* if we have a version difference, then we will install the new OS */
+  /* and reboot the device.  the $JUNOS_CONF file will be loaded on */
+  /* after the install process completes */
+  
+  if( $ztp_conf/install ) {
+    expr jcs:syslog( $SYSLOG, $APPNAME _ ": Junos install required" );
+    var $os = jctyztp:install_os( $ztp_conf );
+    expr jcs:syslog( $SYSLOG, $APPNAME _ ": rebooting in 60 seconds" );
+    expr jcs:syslog( $SYSLOG, $APPNAME _ ": SCRIPT-END");
+    expr jctyztp:reboot( 1 );
+    expr jcs:close( $jnx );
+  }
+  else {
+    var $fini = jctyztp:finalize();
+    expr jcs:syslog( $SYSLOG, $APPNAME _ ": SCRIPT-END");
+    expr jcs:close( $jnx );
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* HTTP Junos configuration file onto the device                      */
+/* ------------------------------------------------------------------ */
+
+function jctyztp:dl_junos_conf() {
+
+  var $get = <file-copy> {
+    <source> 'http://' _ $server _ '/juniper/config.cgi';
+    <destination> $JUNOS_CONF;
+    <staging-directory> $TMPDIR;
+  }
+  
+  var $got = jcs:execute( $jnx, $get );
+  
+  /* @@@ trap error on $got */
+    
+  result true();
+}
+
+/* ------------------------------------------------------------------ */
+/* Load the $JUNOS_CONF file into the candidate config and extract    */
+/* the ZTP config from the [edit groups] area.  Do *NOT* commit       */
+/* this configuration yet, since we may need to install the OS first  */
+/* ------------------------------------------------------------------ */
+
+function jctyztp:ld_junos_conf() {
+
+  /* get the current version from the configuration file */
+  
+  var $get_cur_ver = <get-configuration database='committed'> { <configuration> { <version>; }};
+  var $got_cur_ver = jcs:execute( $jnx, $get_cur_ver );
+
+  /* now load the configuration file we got from the ztp server */
+  
+  var $do_load = <load-configuration action="override" url=$JUNOS_CONF format="text">;
+  var $did_load = jcs:execute( $jnx, $do_load );
+  if(not( $did_load/load-success )) {
+    expr jcs:syslog( $SYSLOG, $APPNAME _ ":ERROR: unable to load config " _ $JUNOS_CONF );
+    /* @@@ trap error here @@@ */
+  }
+  
+  var $get = <get-configuration> { <configuration> {
+    <version>;
+    <groups> { <name> $ZTP_GROUP_NAME;
+      <apply-macro> { <name> $ZTP_MACRO_NAME;
+      }
+    }
+  }}
+  
+  var $got = jcs:execute( $jnx, $get );
+  
+  /* create a node-set to store the following elements             */
+  /* has_version = current Junos version string                    */
+  /* package = filename of Junos package (*.tgz)                   */
+  /* server = http server where package is obtained from           */
+  /* install = present if a install is requeired                   */
+  
+  var $conf := {
+    var $ver = $got_cur_ver/version;
+    <has_version> $ver; 
+    var $package = $got//data[name = 'package']/value;
+    <package> $package;
+    <server> jcs:first-of( $got//data[name = 'server']/value, $server );
+    if(not( jcs:regex( $ver, $package ))) {
+      <install>;
+    }
+  }
+  
+  /* @@@ should put some trap here on ensuring that the config */
+  /* @@@ file actually had the correct group/macro defined */
+    
+  result $conf;
+}
+
+/* ------------------------------------------------------------------ */
+/* Junos Software Installation - download the software from the HTTP  */
+/* server and perform the 'request system software add' operation     */
+/* ------------------------------------------------------------------ */
+
+function jctyztp:install_os( $ztp_conf ) {
+
+  var $local_image = $TMPDIR _ "/" _ $ztp_conf/package;
+  
+  if( jctyztp:file-exists( $local_image )) {
+    expr jcs:syslog( $SYSLOG, $APPNAME _ ": image exists, no copy needed" );
+  }
+  else {
+  
+    /* request system storage cleanup */
+    expr jcs:syslog( $SYSLOG, $APPNAME _ ": cleaning filesystem" );
+    var $clean = jcs:execute( $jnx, 'request-system-storage-cleanup' ); 
+
+    /* file copy .... */
+    expr jcs:syslog( $SYSLOG, $APPNAME _ ": copying image" );    
+    var $do_copy := <file-copy> {
+      <source> "http://" _ $ztp_conf/server _ "/juniper/os/" _ $ztp_conf/package;
+      <destination> $TMPDIR;
+      <staging-directory> $TMPDIR;
+    }   
+    var $did_copy = jcs:execute( $jnx, $do_copy );
+    
+    /* @@@ need to trap error here on $did_copy */
+  }
+
+  /* request system software add ... */
+  expr jcs:syslog( $SYSLOG, $APPNAME _ ": installing image" );    
+  var $do_install := <request-package-add> {
+    <no-validate>;
+    <package-name> $local_image;
+  }
+  var $did_install = jcs:execute( $jnx, $do_install );
+  /* @@@ need to trap error here on $did_install */
+  
+  expr jcs:syslog( $SYSLOG, $APPNAME _ ": completed installing image" );
+   
+  result true();
+}
+
+/* ------------------------------------------------------------------ */
+/* Reboot the device given a delay, in minutes                        */
+/* ------------------------------------------------------------------ */
+
+function jctyztp:reboot( $in_min ) {
+  var $do_reboot = <request-reboot> { <in> $in_min; }
+  var $did_reboot = jcs:execute( $jnx, $do_reboot );
+  result true();
+}
+
+/* ------------------------------------------------------------------ */
+/* Finalize the ZTP process; i.e. after the OS is correct.  Remove    */
+/* the $JUNOS_CONF file and committing the configuration to make      */
+/* it active.                                                         */
+/* ------------------------------------------------------------------ */
+
+function jctyztp:finalize() {
+
+  var $rm1 = jctyztp:file-delete( $JUNOS_CONF );
+
+  /* commit the configuration that was previously loaded */
+  
+  expr jcs:syslog( $SYSLOG, $APPNAME _ ": committing configuration");  
+  var $commit = jcs:execute( $jnx, 'commit-configuration' );
+  if(not( $commit//commit-success )) {
+    expr jcs:syslog( $SYSLOG, $APPNAME _ ":ERROR: unable to commit configuration" );
+    var $die = jctyztp:terminate();
+  }
+  
+  var $rm2 = jctyztp:file-delete( $ZTP_LOCKFILE );
+  
+  result true();
+}
+
+/* ------------------------------------------------------------------ */
+/* Helper routing: check to see if a file exists on the device,       */
+/* returns [ true | false ]                                           */
+/* ------------------------------------------------------------------ */
+
+function jctyztp:file-exists( $filename ) {
+  var $ls_file = <file-list> { <path> $filename; }
+  var $ls_got = jcs:execute( $jnx, $ls_file );
+  var $retval = boolean( $ls_got//file-information );
+  
+  result $retval;
+}
+
+function jctyztp:file-delete( $filename ) {
+  var $do_rm = <file-delete> { <path> $filename; }
+  var $did_rm = jcs:execute( $jnx, $do_rm );
+  /* @@@ trap error */
+  
+  result true();
+}
+
+function jctyztp:only_once() {
+  if( jctyztp:file-exists( $ZTP_LOCKFILE )) {
+    result true();
+  }
+  else {
+    var $do_lock = <file-put> {
+      <filename> $ZTP_LOCKFILE;
+      <encoding> 'ascii';
+      <file-contents> 'locked';
+    }
+    var $did_lock = jcs:execute( $jnx, $do_lock );
+    result false();
+  }
+}
+
+function jctyztp:terminate() {
+  expr jcs:syslog( $SYSLOG, $APPNAME _ ": SCRIPT-FAILED" );
+  var $rm_lock = jctyztp:file-delete( $ZTP_LOCKFILE );
+  terminate;
+}
+
+
