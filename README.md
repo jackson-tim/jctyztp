@@ -26,7 +26,7 @@ The first phase we'll call the "kickstart".  Its purpose is to obtain a generic 
   4. The event-trigger will HTTP-GET a script, [jctyztp.slax](jctyztp.slax).  The script will perform next step of the process
 
 
-The kickstart config must contain the Junos event-trigger.  An exaple of one is shown [here](jctyztp-event.conf)
+The kickstart config must contain the Junos event-trigger.  An example kickstart for an EX switch is shown [here](ex-kickstart.conf).  An exaple of just the event trigger config snippet is shown [here](jctyztp-event.conf).
 
 ## Script Execution
 
