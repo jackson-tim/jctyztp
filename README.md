@@ -43,7 +43,7 @@
 ````
 
   * (3)  If the device is not running that version of code, then it will HTTP-GET the OS package, install it, and then reboot the box
-  * (-)  If the box reboots, then the kickstart config/event-trigger is still active when the device activates.  The event-trigger will run the jctztp.slax script again, but now the OS version is corect
+  * (-)  If the box reboots, then the kickstart config/event-trigger is still active when the device activates.  The event-trigger will run the jctztp.slax script again, but now the OS version is correct
   * (4)  The device's specific configuration is committed
   * (5)  Process is complete
   
