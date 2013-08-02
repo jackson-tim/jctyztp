@@ -49,7 +49,28 @@ The kickstart config must contain the Junos event-trigger.  An exaple of one is 
   * (-)  If the box reboots, then the kickstart config/event-trigger is still active when the device activates.  The event-trigger will run the jctztp.slax script again, but now the OS version is correct
   * (4)  The device's specific configuration is committed
   * (5)  Process is complete
+
+# Web Server
+
+This example contains a Sinatra based webserver application.  It's included to provide a mock-up and dev-test environment for the jctyztp.slax script.  The webserver provides the following URL ("routes"):
+
+````
+HTTP-GET /juniper/script/<script-filename.slax>
+````
+  Used to return the jctyztp.slax file to the Junos device.  The kickstart config event-trigger invokes the jctyztp.slax program by the `op url` command. See [here](jctyztp-event.conf) for the example.
+
+````
+HTTP-GET /juniper/config.cgi
+````
+  Used to simulate your backed that will return a Junos configuration text file.  The idea here is that the
+  webserver backend will be able to take the HTTP-request fields (like source IP-address) to determine which
+  configuration to build/return.  The sample app just returns a fixed file.
+
+````
+HTTP-GET /juniper/os/<package-filename.tgz>
+````
+  Used by the jctyztp script to "file copy" the Junos OS image onto the device
   
-  
+
 # LICENSE
 BSD-2, see [LICENSE](LICENSE.md) file
