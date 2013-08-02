@@ -34,7 +34,7 @@ var $JUNOS_CONF = '/var/tmp/junos.conf';
 
 var $ZTP_GROUP_NAME = "jctyztp";
 var $ZTP_MACRO_NAME = "conf";
-var $ZTP_LOCKFILE = '/tmp/ztp.lock';
+var $ZTP_LOCKFILE = '/tmp/jctyztp.lock';
 
 /* ------------------------------------------------------------------ */
 /* Global variables                                                   */
