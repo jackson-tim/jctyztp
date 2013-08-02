@@ -72,5 +72,12 @@ HTTP-GET /juniper/os/<package-filename.tgz>
   Used by the jctyztp script to "file copy" the Junos OS image onto the device
   
 
+# DEPENDENCIES
+
+ * Junos device supporting autoinstallation or ZTP feature
+ * Ruby 1.9.3 or later
+ * RubyGem: sinatra
+ * RubyGem: sinatra-contrib
+ 
 # LICENSE
 BSD-2, see [LICENSE](LICENSE.md) file
