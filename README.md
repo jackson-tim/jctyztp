@@ -12,6 +12,41 @@
   2. Have the Junos device obtain its specific configuration from an HTTP-GET process (dynamic)
   3. Have the Junos device obtain its OS from an HTTP-GET process that is based on the configuration
   
+# AUTOMATION WORKFLOW
+
+  This section outlines the automation workflow from "factory reset".  There are two basic phases.  
+  
+## Kickstart
+
+  The first phase we'll call the "kickstart".  Its purpose is to obtain a generic config file that triggers a script.  
+  
+  1. Junos initiates a DHCP request and obtains an IP-address
+  2. DHCP server also returns: (a) TFTP server, (b) bootfile name of *generic/kickstart* Junos configuration
+  3. Junos will TFTP-GET the kickstart config and commit it. The config includes an event-trigger  
+  4. The event-trigger will HTTP-GET a script, `jctyztp.slax`.  The script will perform next step of the process
+
+## JCTYZTP
+
+  Once Junos obtains the jctyztp.slax script, the code will perform the following
+  
+  * (1)  Make an HTTP-GET request to obtain the device's specific Junos configuration file.  The actual mechanics of how that configuration file is produced is specific to your application, not this script.  The return of the HTTP-GET is simply a Junos configuration text file.
+  * (2)  The configuraiton **MUST** contain a specific group/apply-macro.  This macro identifies the specific Junos OS package that should be running on the device.  Here is an example:
+  
+````
+   groups {
+       jctyztp {
+           apply-macro conf {
+               package jinstall-ex-2200-13.2X50-D10.2-domestic-signed.tgz;
+           }
+       }
+   }
+````
+
+  * (3)  If the device is not running that version of code, then it will HTTP-GET the OS package, install it, and then reboot the box
+  * (-)  If the box reboots, then the kickstart config/event-trigger is still active when the device activates.  The event-trigger will run the jctztp.slax script again, but now the OS version is corect
+  * (4)  The device's specific configuration is committed
+  * (5)  Process is complete
+  
   
 # LICENSE
 BSD-2, see [LICENSE](LICENSE.md) file
