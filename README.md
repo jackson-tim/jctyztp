@@ -71,6 +71,35 @@ HTTP-GET /juniper/os/<package-filename.tgz>
 ````
   Used by the jctyztp script to "file copy" the Junos OS image onto the device
   
+### Starting the Webserver
+
+You start up the webserver from your Linux prompt very simply.  You will need to be root since the server is using port 80.
+  
+````
+root@myserver$ ruby webapp/server.rb
+````
+
+If you want to change the HTTP server port to somthing other than 80, then you will need to make the change it two places:  (1) in the server.rb file and (2) throughout the jctyztp.slax file where the http calls are being made.
+
+# SYSLOG
+
+The jctyztp script logs status to syslog. Within the jctyztp.slax script there is a variable called `$SYSLOG` that identifies the syslog facility.severy.  It is presently set to `user.info`.  The example kickstart config includes syslog settings so these messages are displayed on the device console.  
+
+Here is some example output for a simple use-case: OS install is not required:
+````
+Aug  2 10:53:48  kickstart cscript: jctyztp[5028]: SCRIPT-BEGIN
+Aug  2 10:53:48  kickstart cscript: jctyztp[5028]: obtaining device config file
+Aug  2 10:53:50  kickstart cscript: jctyztp[5028]: has-ver:13.2X50-D10.2 should-ver:jinstall-ex-2200-13.2X50-D10.2-domestic-signed.tgz
+Aug  2 10:53:51  kickstart cscript: jctyztp[5028]: committing configuration
+Aug  2 10:54:20  staging_switch cscript: jctyztp[5028]: SCRIPT-END
+
+````
+
+# ERROR-HANDLING
+
+The jctztp script has code to ensure that only one instance of the script is running.  It creates a "lockfile" in /tmp.  If for any reason you run into issues/errors, you can always manually remove the file.
+
+Additional error handling will be added to jctyztp.slax as well.
 
 # DEPENDENCIES
 
