@@ -18,12 +18,15 @@
   
 ## Kickstart Config
 
-  The first phase we'll call the "kickstart".  Its purpose is to obtain a generic config file that triggers a script.  
+The first phase we'll call the "kickstart".  Its purpose is to obtain a generic config file that triggers a script.  
   
   1. Junos initiates a DHCP request and obtains an IP-address
-  2. DHCP server also returns: (a) TFTP server, (b) bootfile name of *generic/kickstart* Junos configuration
+  2. DHCP server also returns: (a) TFTP server, (b) bootfile name of *kickstart* Junos configuration
   3. Junos will TFTP-GET the kickstart config and commit it. The config includes an event-trigger  
-  4. The event-trigger will HTTP-GET a script, `jctyztp.slax`.  The script will perform next step of the process
+  4. The event-trigger will HTTP-GET a script, [jctyztp.slax](jctyztp.slax).  The script will perform next step of the process
+
+
+The kickstart config must contain the Junos event-trigger.  An exaple of one is provided in the file [jctyztp-event.conf](jctyztp-event.conf)
 
 ## Script Execution
 
