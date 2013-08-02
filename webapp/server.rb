@@ -18,7 +18,7 @@ end
 ### Here we're just stubbing a test file.
 
 get '/juniper/config.cgi' do
-  send_file("/usr/local/junos/configs/staging-switch.conf")
+  send_file("/usr/local/junos/configs/demo-switch.conf")
 end
 
 ### GET used to download a Junos package (*.tgz) file.
