@@ -8,7 +8,7 @@
   
   Some customers are looking for a flexible solution that allows them to do the following:
   
-  1. Have a *minimal* DHCP server config that does require changes as devices are added/removed
+  1. Have a *minimal* DHCP server config that does **not** require changes as devices are added/removed
   2. Have the Junos device obtain its specific configuration from an HTTP-GET process (dynamic)
   3. Have the Junos device obtain its OS from an HTTP-GET process that is based on the configuration
   
