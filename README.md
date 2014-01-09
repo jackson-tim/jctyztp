@@ -25,8 +25,11 @@ The first phase we'll call the "kickstart".  Its purpose is to obtain a generic 
   3. Junos will TFTP-GET the kickstart config and commit it. The config includes an event-trigger  
   4. The event-trigger will HTTP-GET a script, [jctyztp.slax](jctyztp.slax).  The script will perform next step of the process
 
-
 The kickstart config must contain the Junos event-trigger.  An example kickstart for an EX switch is shown [here](ex-kickstart.conf).  An exaple of just the event trigger config snippet is shown [here](jctyztp-event.conf).
+
+## Kickstart Config for EX (11.4)
+
+These switches seem to ignore the boot-file and request network.conf from the next-server. To actually get a commit with DHCP you need to deactivate autoinstall in the config as well. The [network.conf](network.conf) file here should work for various versions, since some appear to autoinstall with me0 and some with only vlan.0.
 
 ## Script Execution
 
@@ -49,6 +52,19 @@ The kickstart config must contain the Junos event-trigger.  An example kickstart
   * (-)  If the box reboots, then the kickstart config/event-trigger is still active when the device activates.  The event-trigger will run the jctztp.slax script again, but now the OS version is correct
   * (4)  The device's specific configuration is committed
   * (5)  Process is complete
+
+## SLAX 1.0 Version
+
+Unforatunately Juniper is shipping new equipment (manufactured in Q4 2013) that is running 11.4 (or older) software. This limits
+us to SLAX 1.0. I've added a functional SLAX 1.0 script [here](jctyztp-slax10.slax) that should work for the most part.
+
+## Notes
+
+I've modified both versions of the script to change the URL for the config to:
+
+http://ztpserver/juniper/<SERIALNUMBER>/config
+
+I've gone the route of just serving static configs for now to the boxes and not using the Sinatra (or other) web-server included.
 
 # DevTest Web Server
 
