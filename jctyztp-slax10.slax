@@ -1,0 +1,199 @@
+version 1.0;
+
+/* ------------------------------------------------------------------ */
+/* XML namespaces                                                     */
+/* ------------------------------------------------------------------ */
+
+/* Juniper */
+ns junos = "http://xml.juniper.net/junos/*/junos";
+ns xnm = "http://xml.juniper.net/xnm/1.1/xnm";
+ns jcs = "http://xml.juniper.net/junos/commit-scripts/1.0";
+
+/* EXSLT */
+ns str extension = "http://exslt.org/strings";
+
+/* private namespace for this script */
+/* ns jctyztp = "http://xml.juniper.com/jcs:syslog ( $SYSLOG, $APPNAME,ztp/1.0"; */
+
+/* import '../import/junos.xsl'; */
+
+import '/usr/libdata/cscript/import/junos.xsl';
+
+/* ------------------------------------------------------------------ */
+/* Script parameters                                                  */
+/* ------------------------------------------------------------------ */
+
+param $server = 'ztpserver';
+
+/* ------------------------------------------------------------------ */
+/* Constants                                                          */
+/* ------------------------------------------------------------------ */
+
+var $APPNAME = 'jctyztp[' _ $junos-context/pid _ ']';
+var $SYSLOG = 'user.info';
+var $TMPDIR = '/var/tmp';
+var $JUNOS_CONF = '/var/tmp/junos.conf';
+
+var $ZTP_GROUP_NAME = "jctyztp";
+var $ZTP_MACRO_NAME = "conf";
+var $ZTP_LOCKFILE = '/tmp/jctyztp.lock';
+
+
+/* ------------------------------------------------------------------ */
+/* Global variables                                                   */
+/* ------------------------------------------------------------------ */
+
+var $jnx = jcs:open();
+
+/* ------------------------------------------------------------------ */
+/*                                MAIN                                */ 
+/* ------------------------------------------------------------------ */
+
+match / {  
+
+  if(not( $jnx )) {
+    expr jcs:syslog( $SYSLOG, $APPNAME, ":ERROR: unable to connect to Junos API");
+    <xsl:message terminate="yes"> "Terminating.";
+  }
+  
+  var $chassisset = jcs:execute($jnx, 'get-chassis-inventory');
+  var $chassis = $chassisset/chassis/description;
+  var $serialnumber = $chassisset/chassis/serial-number;  
+  
+  if(not( $chassis )) {
+    expr jcs:syslog ( $SYSLOG, $APPNAME, ": ERROR: could not determine chassis type");
+    <xsl:message terminate="yes"> "Terminating.";
+  }
+
+  if(not( $serialnumber )) {
+    expr jcs:syslog ( $SYSLOG, $APPNAME, ": ERROR: could not determine serial number"); 
+    <xsl:message terminate="yes"> "Terminating.";
+  }
+
+  var $lock_file = <file-list> { <path> $ZTP_LOCKFILE; }
+  var $lock_ls_got = jcs:execute( $jnx, $lock_file );
+  var $lock_retval = boolean( $lock_ls_got//file-information );
+  
+  if( $lock_retval ) {
+    expr jcs:syslog( $SYSLOG, $APPNAME, ": process already running, backing off" ); 
+    <xsl:message terminate="yes"> "Terminating.";
+  }
+  else {
+    var $add_lock = <file-put> {
+	  <filename> $ZTP_LOCKFILE;
+	  <encoding> 'ascii';
+	  <file-contents> 'locked';
+	}
+	var $did_lock = jcs:execute( $jnx, $add_lock );
+  }
+  
+  expr jcs:syslog( $SYSLOG, $APPNAME, "SCRIPT-BEGIN" ); 
+  
+  /* if the $JUNOS_CONF file is not on the device, then */
+  /* download it from the server */
+  
+  var $conf_file = <file-list> { <path> $JUNOS_CONF; }
+  var $conf_ls_got = jcs:execute( $jnx, $conf_file );
+  var $conf_retval = boolean( $conf_ls_got//file-information );
+  
+  if(not( $conf_retval )) {
+    expr jcs:syslog( $SYSLOG, $APPNAME, ": obtaining device config file");
+	var $copy_get = <file-copy> {
+      <source> 'http://' _ $server _ '/juniper/' _ $serialnumber _ '/config';
+      <destination> $JUNOS_CONF;
+      <staging-directory> $TMPDIR;
+    }
+    var $copy_got = jcs:execute( $jnx, $copy_get );
+  }
+    
+  /* now load $JUNOS_CONF into the candidate configuration so we can */
+  /* extract the ZTP config */
+  var $get_cur_ver = <get-configuration database='committed'> { <configuration> { <version>; }};
+  var $got_cur_ver = jcs:execute( $jnx, $get_cur_ver );
+
+  /* now load the configuration file we got from the ztp server */
+  var $do_load = <load-configuration action="override" url=$JUNOS_CONF format="text">;
+  var $did_load = jcs:execute( $jnx, $do_load );
+  if(not( $did_load/load-success )) {
+    expr jcs:syslog( $SYSLOG, $APPNAME, ":ERROR: unable to load config ", $JUNOS_CONF );
+    /* @@@ trap error here @@@ */
+  }
+  var $load_get = <get-configuration> { <configuration> {
+    <version>;
+    <groups> { <name> $ZTP_GROUP_NAME;
+      <apply-macro> { <name> $ZTP_MACRO_NAME;
+      }
+    }
+  }}
+  var $load_got = jcs:execute( $jnx, $load_get );
+  
+  var $ztp_conf := {
+    var $ver = $got_cur_ver/version;
+	<has_version> $ver;
+	var $package = $load_got//data[name = 'package']/value;
+	<package> $package;
+	<server> jcs:first-of( $load_got//data[name = 'server']/value, $server );
+	if(not( jcs:regex( $ver, $package))) {
+	  <install>;
+	}
+  }
+  
+  expr jcs:syslog( $SYSLOG, $APPNAME, ": has-ver:", $ztp_conf/has_version, " should-ver:", $ztp_conf/package );
+  
+  /* if we have a version difference, then we will install the new OS */
+  /* and reboot the device.  the $JUNOS_CONF file will be loaded on */
+  /* after the install process completes */
+  
+  if( $ztp_conf/install ) {
+    expr jcs:syslog( $SYSLOG, $APPNAME, ": Junos install required" );
+    var $local_image = $TMPDIR _ "/" _ $ztp_conf/package;
+    
+    var $install_file = <file-list> { <path> $local_image; }
+    var $install_got = jcs:execute( $jnx, $install_file );
+    var $install_retval = boolean( $install_got//file-information );
+	if ( $install_retval) {
+	  expr jcs:syslog( $SYSLOG, $APPNAME, ": image exists, no copy needed" );
+	}
+    else {
+	  /* request system storage cleanup */
+	  expr jcs:syslog( $SYSLOG, $APPNAME, ": cleaning filesystem" );
+	  var $clean = jcs:execute( $jnx, 'request-system-storage-cleanup' ); 
+	  /* file copy ... */
+	  expr jcs:syslog( $SYSLOG, $APPNAME, ": copying image" ); 
+	  var $do_copy := <file-copy> {
+	    <source> "http://" _ $ztp_conf/server _ "/juniper/os/" _ $ztp_conf/package;
+		<destination> $TMPDIR;
+        <staging-directory> $TMPDIR;
+	  }
+	  var $did_copy = jcs:execute( $jnx, $do_copy );
+	}
+	/* request system software add ... */
+	expr jcs:syslog( $SYSLOG, $APPNAME, ": installing image" );
+	var $do_install := <request-package-add> {
+	  <no-validate>;
+	  <package-name> $local_image;
+	}
+	var $did_install = jcs:execute( $jnx, $do_install );
+	expr jcs:syslog( $SYSLOG, $APPNAME, ": completed installing image" );
+    expr jcs:syslog( $SYSLOG, $APPNAME, ": rebooting in 60 seconds" );
+    expr jcs:syslog( $SYSLOG, $APPNAME, ": SCRIPT-END");
+	var $do_reboot = <request-reboot> { <in> 1; }
+	var $did_reboot = jcs:execute( $jnx, $do_reboot );
+    expr jcs:close( $jnx );
+  }
+  else {
+    var $do_rm_conf = <file-delete> { <path> $JUNOS_CONF; }
+	var $did_rm_conf = jcs:execute( $jnx, $do_rm_conf );
+	expr jcs:syslog( $SYSLOG, $APPNAME, ": committing configuration");
+	var $complete_commit = jcs:execute( $jnx, 'commit-configuration' );
+	if(not( $complete_commit//commit-success )) {
+	  expr jcs:syslog( $SYSLOG, $APPNAME, ":ERROR: unable to commit configuration" );
+	  expr jcs:syslog( $SYSLOG, $APPNAME, ": SCRIPT-FAILED" );
+	  var $do_rm_lock = <file-delete> { <path> $ZTP_LOCKFILE; }
+	  var $did_rm_lock = jcs:execute( $jnx, $do_rm_lock );
+	  <xsl:message terminate="yes"> "Terminating.";
+	}
+    expr jcs:syslog( $SYSLOG, $APPNAME, ": SCRIPT-END");
+    expr jcs:close( $jnx );
+  }
+}
