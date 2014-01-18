@@ -116,6 +116,9 @@ match / {
   var $did_load = jcs:execute( $jnx, $do_load );
   if(not( $did_load/load-success )) {
     expr jcs:syslog( $SYSLOG, $APPNAME, ":ERROR: unable to load config ", $JUNOS_CONF );
+    var $do_rmc_lock = <file-delete> { <path> $ZTP_LOCKFILE; }
+    var $did_rmc_lock = jcs:execute( $jnx, $do_rm_lock );
+    <xsl:message terminate="yes"> "Terminating.";
     /* @@@ trap error here @@@ */
   }
   var $load_get = <get-configuration> { <configuration> {
